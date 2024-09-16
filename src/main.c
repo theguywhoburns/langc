@@ -4,7 +4,7 @@
 /// First 4 bits correspond to token sub-type
 /// Basically same shit
 #define TOKEN_EOF     0b00000000
-#define TOKEN_UNKNOWN 0b00000000
+#define TOKEN_UNKNOWN 0b11111111
 
 #define TOKEN_PAREN   0b00000001
 #define TOKEN_IDENT   0b00000010
@@ -32,6 +32,7 @@
 #define TOKEN_STRING  0b01000000
 // 'c'
 #define TOKEN_CHAR    0b11000000
+#define TOKEN_SYMBOL  0b00100000
 
 // Number types
 // anything except the 4 below will be treated as decimal, or it will FUCKING CRASH
@@ -76,6 +77,7 @@
 #define IS_KEYWORD(t) (((t) & 0b11110000) == TOKEN_KEYWORD && IS_IDENT(t))
 #define IS_STRING(t) (((t) & 0b11110000) == TOKEN_STRING && IS_IDENT(t))
 #define IS_CHAR(t) (((t) & 0b11110000) == TOKEN_CHAR && IS_IDENT(t))
+#define IS_SYMBOL(t) (((t) & 0b11110000) == TOKEN_SYMBOL && IS_IDENT(t))
 
 #define IS_DECIMAL(t) (((t) & 0b11110000) == TOKEN_DECIMAL && IS_NUMBER(t))
 #define IS_HEX(t) (((t) & 0b11110000) == TOKEN_HEX && IS_NUMBER(t))
@@ -88,73 +90,61 @@
 #define IS_EOF(t) (t == TOKEN_EOF)
 #define IS_UNKNOWN(t) (t == TOKEN_UNKNOWN)
 
+bool tokgeteof(LexerRule* rule, TokenStream* stream, Token* t) {
+	if(stream->idx == stream->src_length) {
+		*t = (Token){.toktl = TOKEN_EOF, .line = stream->line, .column = stream->column};
+		return true;
+	}
+	return false;
+}
+
 int main() {
-    LexerRuleset set = {0};
-    { 
-        enum LEXER_TOKEN_TYPE_TYPE ___TEMP = _Generic(
-            0b00000000, 
-            const char* : LEXER_TOKEN_TYPE_TYPE_STRING, 
-            char* : LEXER_TOKEN_TYPE_TYPE_STRING, 
-            const wchar_t* : LEXER_TOKEN_TYPE_TYPE_WSTRING, 
-            wchar_t* : LEXER_TOKEN_TYPE_TYPE_WSTRING, 
-            unsigned char : LEXER_TOKEN_TYPE_TYPE_CHAR, 
-            char : LEXER_TOKEN_TYPE_TYPE_CHAR, 
-            unsigned short : LEXER_TOKEN_TYPE_TYPE_SHORT, 
-            short : LEXER_TOKEN_TYPE_TYPE_SHORT, 
-            unsigned int : LEXER_TOKEN_TYPE_TYPE_INT, 
-            int : LEXER_TOKEN_TYPE_TYPE_INT, 
-            unsigned long : LEXER_TOKEN_TYPE_TYPE_LONG, 
-            long : LEXER_TOKEN_TYPE_TYPE_LONG, 
-            float : LEXER_TOKEN_TYPE_TYPE_FLOAT, 
-            double : LEXER_TOKEN_TYPE_TYPE_DOUBLE, 
-            default : LEXER_TOKEN_TYPE_TYPE_CHAR
-        ); 
-        __typeof__(0b00000000) ___TEMP_2 = 0b00000000; 
-        _Generic("\0", 
-            const char* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_STRING, "\0"), 
-            char* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_STRING, "\0"), 
-            const wchar_t* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_WSTRING, "\0"), 
-            wchar_t* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_WSTRING, "\0"), 
-            const regex_t* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_REGEX, "\0"), 
-            regex_t* : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_REGEX, "\0"), 
-            PFN_LEXER_RULE : LexerRuleNew_(&set, ___TEMP, &___TEMP_2, LEXER_TOKEN_RULE_TYPE_FUNCTION,"\0"), 
-            default : LexerError("/home/dev/Projects/langc/src/main.c", 93, "Unknown rule type", __extension__ __PRETTY_FUNCTION__) 
-        );
-    }
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_BRACKET | TOKEN_OPEN , "(");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_BRACKET | TOKEN_CLOSE, ")");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_SQUARE  | TOKEN_OPEN , "[");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_SQUARE  | TOKEN_CLOSE, "]");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_CURLY   | TOKEN_OPEN , "{");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_CURLY   | TOKEN_CLOSE, "}");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_ANGLE   | TOKEN_OPEN , "<");
-    LexerRuleNew(set, TOKEN_PAREN | TOKEN_ANGLE   | TOKEN_CLOSE, ">");
+	LexerRuleset set = {0};
+	LexerRuleNew(set, TOKEN_EOF, tokgeteof); // EOF of the file, must be the first rule
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_BRACKET | TOKEN_OPEN , "(");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_BRACKET | TOKEN_CLOSE, ")");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_SQUARE  | TOKEN_OPEN , "[");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_SQUARE  | TOKEN_CLOSE, "]");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_CURLY   | TOKEN_OPEN , "{");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_CURLY   | TOKEN_CLOSE, "}");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_ANGLE   | TOKEN_OPEN , "<");
+	LexerRuleNew(set, TOKEN_PAREN | TOKEN_ANGLE   | TOKEN_CLOSE, ">");
 
-    LexerRuleNew(set, TOKEN_NUMBER | TOKEN_DECIMAL, LexerCreateRegex("^[0-9]+"));
-    LexerRuleNew(set, TOKEN_NUMBER | TOKEN_HEX,     LexerCreateRegex("^0x[0-9a-fA-F]+|[0-9a-fA-F]+h"));
-    LexerRuleNew(set, TOKEN_NUMBER | TOKEN_OCT,     LexerCreateRegex("^0[0-7]+"));
-    LexerRuleNew(set, TOKEN_NUMBER | TOKEN_BIN,     LexerCreateRegex("^0b[01]+"));
-    LexerRuleNew(set, TOKEN_NUMBER | TOKEN_FLOAT,   LexerCreateRegex("^[-+]?[0-9]*\\.[0-9]+([eE][-+]?[0-9]+)?"));
+	LexerRuleNew(set, TOKEN_NUMBER | TOKEN_DECIMAL, LexerCreateRegex("^[-+]?[0-9]+"));
+	LexerRuleNew(set, TOKEN_NUMBER | TOKEN_HEX,     LexerCreateRegex("^0x[0-9a-fA-F]+|[0-9a-fA-F]+h"));
+	LexerRuleNew(set, TOKEN_NUMBER | TOKEN_OCT,     LexerCreateRegex("^0[0-7]+"));
+	LexerRuleNew(set, TOKEN_NUMBER | TOKEN_BIN,     LexerCreateRegex("^0b[01]+"));
+	LexerRuleNew(set, TOKEN_NUMBER | TOKEN_FLOAT,   LexerCreateRegex("^[-+]?[0-9]*\\.[0-9]+([eE][-+]?[0-9]+)?"));
 
-    LexerRuleNew(set, TOKEN_IDENT | TOKEN_CHAR,         LexerCreateRegex("^'.'"));
-    LexerRuleNew(set, TOKEN_IDENT | TOKEN_STRING,       LexerCreateRegex("^\".*\""));
-    LexerRuleNew(set, TOKEN_IDENT | TOKEN_KEYWORD,      LexerCreateRegex("^(char|double|float|int|long|short|signed|unsigned|void|_Bool|_Complex|_Imaginary|bool|complex|imaginary)$"));
-    LexerRuleNew(set, TOKEN_IDENT | TOKEN_NORMAL_IDENT, LexerCreateRegex("^[a-zA-Z_][a-zA-Z0-9_]*"));
+	LexerRuleNew(set, TOKEN_IDENT | TOKEN_CHAR,         LexerCreateRegex("^'.'"));
+	LexerRuleNew(set, TOKEN_IDENT | TOKEN_STRING,       LexerCreateRegex("^\".*\""));
+	LexerRuleNew(set, TOKEN_IDENT | TOKEN_KEYWORD,      LexerCreateRegex("^(char|double|float|int|long|short|signed|unsigned|void|_Bool|_Complex|_Imaginary|bool|complex|imaginary)"));
+	LexerRuleNew(set, TOKEN_IDENT | TOKEN_NORMAL_IDENT, LexerCreateRegex("^[a-zA-Z_][a-zA-Z0-9_]*"));
+	LexerRuleNew(set, TOKEN_IDENT | TOKEN_SYMBOL,		LexerCreateRegex("^(\\;|\\,|\\.|\\+|\\-|\\*)"));
 
-    LexerRuleNew(set, TOKEN_COMMENT, LexerCreateRegex("^//.*"));
-    LexerRuleNew(set, TOKEN_COMMENT | TOKEN_MULTILINE_COMMENT,  LexerCreateRegex("^/\\*.*\\*/"));
-    LexerRuleNew(set, TOKEN_COMMENT | TOKEN_PREPROCESSOR_MACRO, LexerCreateRegex("^#.*"));
+	LexerRuleNew(set, TOKEN_COMMENT, LexerCreateRegex("^//.*"));
+	LexerRuleNew(set, TOKEN_COMMENT | TOKEN_MULTILINE_COMMENT,  LexerCreateRegex("^/\\*.*\\*/"));
+	LexerRuleNew(set, TOKEN_COMMENT | TOKEN_PREPROCESSOR_MACRO, LexerCreateRegex("^#.*"));
+	LexerRuleNew(set, TOKEN_UNKNOWN, LexerCreateRegex(".*"));
 
-    for(int i = 0; i < LexerRule_vec_length(&set.rules); i++) {
-        LexerRule rule = set.rules[i];
-        switch (rule.type) {
-        case LEXER_TOKEN_RULE_TYPE_STRING:  printf("[%d:%d\t]:STRING RULE:  0b%b,\t \"%.*s\"\n",    i, rule.token_type_type, rule.token_type_int, rule.len, rule.str);break;
-        case LEXER_TOKEN_RULE_TYPE_WSTRING: printf("[%d:%d\t]:WSTRING RULE: 0b%b,\tL\"%.*ls\"\n",   i, rule.token_type_type, rule.token_type_int, rule.wlen, rule.wstr);break;
-        case LEXER_TOKEN_RULE_TYPE_REGEX:   printf("[%d:%d\t]:REGEX RULE:   0b%b,   \t %zu\n",      i, rule.token_type_type, rule.token_type_int, rule.regex->__fastmap);break;
-        case LEXER_TOKEN_RULE_TYPE_FUNCTION:printf("[%d:%d\t]:FUNCTION RULE:0b%b,\t %p\n",          i, rule.token_type_type, rule.token_type_int, rule.fn);break;
-        default:
-            break;
-        }
-    }
-
+	for(int i = 0; i < LexerRule_vec_length(&set.rules); i++) {
+		LexerRule rule = set.rules[i];
+		switch (rule.type) {
+		case LEXER_TOKEN_RULE_TYPE_STRING:  printf("[%d:%d\t]:STRING RULE:  0b%b,    \t \"%.*s\"\n",    i, rule.token_type_type, rule.token_type_int, rule.len, rule.str);break;
+		case LEXER_TOKEN_RULE_TYPE_REGEX:   printf("[%d:%d\t]:REGEX RULE:   0b%b,    \t %zu\n",      i, rule.token_type_type, rule.token_type_int, rule.regex->__fastmap);break;
+		case LEXER_TOKEN_RULE_TYPE_FUNCTION:printf("[%d:%d\t]:FUNCTION RULE:0b%b,\t %p\n",          i, rule.token_type_type, rule.token_type_int, rule.fn);break;
+		default:printf("Wut?\n");
+		}
+	}
+	
+	const char* test_c_source = "int main() { return 0; }";
+	TokenStream lexer = TokenStreamNewWithExtSource(test_c_source, set);
+	while (true) {
+		Token token = lexer.next(&lexer);
+		if (token.tokti == TOKEN_EOF)
+			break;
+		printf("[%zu:%zu]: 0b%b,    \t %.*s\n",
+		       token.line, token.column, token.tokti, token.value_len, token.value);
+	}
+	return 0;
 }
